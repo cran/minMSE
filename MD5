@@ -1,0 +1,15 @@
+a9a750cf16d3385e1924b9a4625680d3 *DESCRIPTION
+7f9279b3c6b567d34eb97bde0de7abc3 *NAMESPACE
+0294e6306169e5e1d8ff12438127b849 *R/MinMSET.R
+0f8d5644a92a95f9bba5cb03c17f665a *README.md
+3ff4a6c478982376868b39264e467bb0 *man/assignMinMSETreatment.Rd
+f68788f0bb852354f92242801894dd3f *man/assign_treatment.Rd
+335c9c16dfe28458c7514c34111004e9 *man/count_occurrences.Rd
+9687a1345287a78d3ccf16670b95cc13 *man/evaluate_solution.Rd
+9236bec1f1a1844c7dec59fd47f7e8a4 *man/evaluate_solution.optim.Rd
+bb1824f07f5bd46941ea1a80f34d5bc5 *man/plotting_file.Rd
+ff3e9ac77176fe6c703f3aa65d2b6994 *man/program_output.Rd
+30ed1843ee54e178f6d8afa18fb0620c *man/sample_with_prev_treatment.Rd
+9212a672151e53cc090818df04979a9a *man/scale_vars.Rd
+b93f86f930aa2a7b4510124496d81b9d *man/swap_treatment.Rd
+2f8eaba5e956b3b2ecc3372d9fdd71fd *man/swap_treatment.optim.Rd

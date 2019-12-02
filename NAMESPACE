@@ -1,0 +1,7 @@
+exportPattern("^[[:alpha:]]+")
+import(MASS)
+export(assignMinMSETreatment)
+importFrom("grDevices", "dev.off", "dev.new", "rainbow")
+importFrom("graphics", "lines")
+importFrom("stats", "optim", "runif", "sd")
+importFrom("utils", "read.csv", "tail", "write.csv")
