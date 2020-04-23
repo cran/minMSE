@@ -27,30 +27,76 @@ library(MASS)
 plotting_file <- "plotting_data.csv"
 program_output <- "program_output.txt"
 
-evaluate_solution <- function(par, data) {
-  n_treatments <- max(par)
+gcd <- function(v, t) {
+  while ((c <- v %% t) != 0) {
+    v <- t
+    t <- c
+  }
+  return (t)
+}
 
+vector_gcd <- function(vec) {
+  current_gcd <- vec[1]
+  for (i in 1:length(vec)) {
+    current_gcd = gcd(vec[i], current_gcd)
+
+    if (current_gcd == 1){
+      return (1)
+    }
+  }
+  return(current_gcd)
+}
+
+evaluate_solution <- function(par, data, mse_weights = NULL) {
   ind <- c(1:length(par))
 
-  x_0 <- as.matrix(data[which(par[ind] == 0),])
-  x_0_inv <- ginv(t(x_0) %*% (x_0)) # Import MASS and use ginv for the pseudoinverse
-  sum_of_inv_xt <- n_treatments * x_0_inv
-
-  for (i in 1:n_treatments) {
-    x <- as.matrix(data[which(par[ind] == i),])
-    x_inv <- ginv(t(x) %*% (x))
-    sum_of_inv_xt <- sum_of_inv_xt + x_inv
+  w_norm <- 1
+  v_norm <- 1
+  n_outcomes <- 1
+  n_treatments <- 1 # Consider the number of treatments to be 1 when we use the scaling
+  if (is.vector(mse_weights)){ # Vector case
+    v_norm <- sum(mse_weights) # Compute the l1 norm of the vector
+  } else if (is.matrix(mse_weights)){ # Matrix case
+    n_outcomes <- nrow(mse_weights)
+    v_norm <- sum(apply(mse_weights, 2, vector_gcd))
+    w_norm <- sum(apply(mse_weights, 1, vector_gcd))
+  } else { # Then it is null
+    n_treatments <- max(par)
   }
 
-  mean_of_xi <- sapply(data, mean) # Mean of all columns
-  transpose_mean_of_xi <- t(mean_of_xi)
+  x_0 <- data[(par[ind] == 0), , drop = FALSE]
+  x_0_inv <- ginv(crossprod(x_0)) # Import MASS and use ginv for the pseudoinverse
+  inv_x0 <- n_treatments * w_norm * v_norm * x_0_inv # Weigh x_0 by the w and v norm or by the number of treatments
 
-  evaluated_value = transpose_mean_of_xi %*% sum_of_inv_xt %*% mean_of_xi
+  wk_weight <- 1
+  vk_weight <- 1
+  sum_of_scaled <- inv_x0 # Initialize sum with inv_x0
+  for (i in 1:n_outcomes){
+    sum_of_inv_xt <- 0
+    if (is.matrix(mse_weights)){ # Matrix case
+      wk_weight <- vector_gcd(mse_weights[i, ])
+    }
+    for (j in 1:n_treatments) {
+      x <- data[(par[ind] == j), , drop = FALSE]
+      x_inv <- ginv(crossprod(x))
+      if (is.vector(mse_weights)){ # Vector case
+        vk_weight <- mse_weights[j]
+      } else if (is.matrix(mse_weights)){ # Matrix case
+        vk_weight <- mse_weights[i, j] / wk_weight
+      }
+      sum_of_inv_xt <- sum_of_inv_xt + vk_weight * x_inv
+    }
+    sum_of_scaled <- sum_of_scaled + wk_weight * sum_of_inv_xt
+  }
+
+  mean_of_xi <- colMeans(data) # Mean of all columns
+  evaluated_value = crossprod(mean_of_xi, sum_of_scaled) %*% mean_of_xi
+
   return (evaluated_value)
 }
 
-evaluate_solution.optim <- function(par, data, change = NULL, prev_index_list = NULL) { # Optim wants fn and gr to have the same parameters
-  return(evaluate_solution(par, data))
+evaluate_solution.optim <- function(par, data, mse_weights = NULL, change = NULL, prev_index_list = NULL) { # Optim wants fn and gr to have the same parameters
+  return(evaluate_solution(par, data, mse_weights))
 }
 
 scale_vars <- function(data) {
@@ -82,11 +128,7 @@ swap_treatment <- function(current_treatment, change, prev_index_list = NULL) {
     scrambled_treatment <- trunc_treatment[s_ind]
   }
 
-  for (i in 1:max_swaps) { # Do the swaps
-    temp <- scrambled_treatment[i]
-    scrambled_treatment[i] <- scrambled_treatment[i + 1]
-    scrambled_treatment[i + 1] <- temp
-  }
+  scrambled_treatment[1:(max_swaps+1)] <- scrambled_treatment[c(2:(max_swaps+1), 1)]
 
   if (is.null(prev_index_list)){
     current_treatment <- scrambled_treatment[order(s_ind)] # If we don't have a previous assignment, take the whole list
@@ -97,36 +139,37 @@ swap_treatment <- function(current_treatment, change, prev_index_list = NULL) {
   return (current_treatment)
 }
 
-swap_treatment.optim <- function(current_treatment, data = NULL, change, prev_index_list = NULL) { # Optim wants fn and gr to have the same parameters
+swap_treatment.optim <- function(current_treatment, data = NULL, change, prev_index_list = NULL, mse_weights = NULL) { # Optim wants fn and gr to have the same parameters
   return (swap_treatment(current_treatment, change, prev_index_list))
 }
 
 count_occurrences <- function(df_treatments, curr_treatment) {
-  count <- 0
-
   if (ncol(df_treatments) == 1) {
     return (0)
   }
 
-  for (col in 2:ncol(df_treatments)) {
-    if (all.equal(df_treatments[, col], curr_treatment) == TRUE) { # If the current treatment is equal to a column of the dataframe
-      count <- count + 1
-    }
+  if (ncol(df_treatments) == 2){
+    count <- if (all(df_treatments[, 2] == curr_treatment)) 1 else 0  # If the current treatment is equal to the existing treatment
+  } else {
+    count <- sum(apply(df_treatments[, 2:ncol(df_treatments)] == curr_treatment, 2, all))  # If the current treatment is equal to a column of the dataframe
   }
 
   return (count)
 }
 
-sample_with_prev_treatment <- function(prev_treatment, n_treatments){
+sample_with_prev_treatment <- function(prev_treatment, n_treatments, n_per_group){
   groups = n_treatments + 1;
-  n_per_group = ceiling(length(prev_treatment) / groups)
   to_assign <- sum(is.na(prev_treatment)) # How many people still have to be assigned
   current_treatment <- prev_treatment
   remaining_times <- c()
   for (i in 1:groups){
-    remaining_times[i] <- n_per_group - length(which(current_treatment == (i - 1))) # vector that contains how many times each index can still be assigned
+    if(is.na(n_per_group[2])){ # The number of elements per group is numerical
+      current_n_per_group <- n_per_group
+    } else { # The number of elements per group is a vector
+      current_n_per_group <- n_per_group[i]
+    }
+    remaining_times[i] <- current_n_per_group - length(which(current_treatment == (i - 1))) # vector that contains how many times each index can still be assigned
   }
-
   smaller_repetitions <- rep(0:n_treatments, times = remaining_times)
   sampled <- sample(smaller_repetitions, size = to_assign, replace = FALSE)
 
@@ -144,6 +187,8 @@ sample_with_prev_treatment <- function(prev_treatment, n_treatments){
 assign_treatment <- function(current_data,
                              prev_treatment = NULL,
                              n_treatments = 1,
+                             n_per_group = NULL,
+                             mse_weights = NULL,
                              iterations = 50,
                              change = 3,
                              cooling = 1,
@@ -152,33 +197,37 @@ assign_treatment <- function(current_data,
                              built_in = 0,
                              plot = 0,
                              create_plot_file = 1) {
-  n_obs <- dim(current_data)[1]
-  n_per_group = ceiling(n_obs / (n_treatments + 1))
 
-  repetitions <- rep(0:n_treatments, each = n_per_group)
+  n_obs <- dim(current_data)[1]
+  if(is.null(n_per_group)){
+    n_per_group <- ceiling(n_obs / (n_treatments + 1))
+    repetitions <- rep(0:n_treatments, each = n_per_group)
+  } else { # in case division is user provided
+    repetitions <- rep(0:n_treatments, n_per_group)
+  }
 
   # Generate first solution
   if (is.null(prev_treatment)){
     current_treatment <- sample(repetitions, size = nrow(current_data), replace = FALSE)
     prev_treat_na_index <- NULL
   } else { # In case some people are already assigned a group
-    current_treatment <- sample_with_prev_treatment(prev_treatment, n_treatments)
+    current_treatment <- sample_with_prev_treatment(prev_treatment, n_treatments, n_per_group)
     prev_treat_na_index <- which(is.na(prev_treatment)) # Contains the indices of the non-assigned people
   }
 
   # Evaluate first solution
-  current_ssd <- evaluate_solution(current_treatment, current_data)
+  current_ssd <- evaluate_solution(current_treatment, current_data, mse_weights)
 
   # Choose the best solution out of 5% of the iterations
   num_first_solutions = min(max(round(iterations / 100 * 5) - 1, n_obs - 1), round(iterations / 100 * 10) - 1)
-
+  
   for (k in 1:num_first_solutions) {
     if (is.null(prev_treatment)){
       next_treatment <- sample(repetitions, size = nrow(current_data), replace = FALSE)
     } else { # In case some people are already assigned a group
-      next_treatment <- sample_with_prev_treatment(prev_treatment, n_treatments)
+      next_treatment <- sample_with_prev_treatment(prev_treatment, n_treatments, n_per_group)
     }
-    next_ssd <- evaluate_solution(next_treatment, current_data)
+    next_ssd <- evaluate_solution(next_treatment, current_data, mse_weights)
 
     if (next_ssd < current_ssd) {
       current_treatment <- next_treatment
@@ -265,7 +314,7 @@ assign_treatment <- function(current_data,
   for (k in 1:iterations) {
     # Swap some number (change) of values in the treatment assignment
     next_treatment <- swap_treatment(current_treatment, change, prev_treat_na_index)
-    next_ssd <- evaluate_solution(next_treatment, current_data)
+    next_ssd <- evaluate_solution(next_treatment, current_data, mse_weights)
 
     rand = runif(1)
     if (cooling == 1) {
@@ -300,146 +349,184 @@ assign_treatment <- function(current_data,
   return (append(opt_treatment, opt_ssd))
 }
 
-assignMinMSETreatment <- function(data,
-                                  prev_treatment = NULL,
-                                  n_treatments = 1,
-                                  iterations = 50,
-                                  change = 3,
-                                  cooling = 1,
-                                  t0 = 10,
-                                  tmax = 10,
-                                  built_in = 0,
-                                  desired_test_vectors = 100,
-                                  percentage_equal_treatments = 1,
-                                  plot = 0,
-                                  trace_output = 1,
-                                  filename = NULL) {
+assign_minMSE_treatment <- function(data,
+                                    prev_treatment = NULL,
+                                    n_treatments = 1,
+                                    n_per_group = NULL,
+                                    mse_weights = NULL,
+                                    iterations = 50,
+                                    change = 3,
+                                    cooling = 1,
+                                    t0 = 10,
+                                    tmax = 10,
+                                    built_in = 0,
+                                    desired_test_vectors = 100,
+                                    percentage_equal_treatments = 1,
+                                    plot = 0,
+                                    trace_output = 1,
+                                    filename = NULL) {
+  if (is.matrix(data)){ # If the data is a matrix
+   data <- as.data.frame(data) # convert to dataframe
+  } else if (!is.data.frame(data)){
+    stop("Please convert the data to a dataframe or to a matrix before calling this function.")
+  }
 
-    n_obs <- dim(data)[1]
+  n_obs <- dim(data)[1]
 
-    # Checking all variables
-    if (n_treatments <= 0) {
-      stop("Number of treatments must be greater or equal than 1.\n")
+  # Checking all variables
+  if (n_treatments <= 0) {
+    stop("Number of treatments must be greater or equal than 1.\n")
+  }
+
+  if (!is.null(n_per_group)){
+    if ((is.vector(n_per_group) && length(n_per_group) != (n_treatments+1)) || !is.vector(n_per_group)) {
+      stop("Group sizes must be provided in a vector with the same length as the number of experimental groups!\n")
     }
-
-    if (iterations < 1) {
-      stop("Positive number of iterations needed.\n")
+    
+    if (sum(n_per_group) != n_obs){
+      stop("The group sizes have to be consistent with the total number of observations.") 
     }
+  }
+  
 
-    if (change < 1) {
-      change <- 3
+  if (!is.null(mse_weights) && !is.vector(mse_weights) && !is.matrix(mse_weights)){
+    stop("The weights must be either a vector or a matrix.")
+  }
+
+  if (!is.null(mse_weights) &&
+      ((is.vector(mse_weights) && n_treatments != length(mse_weights)) ||
+       (is.matrix(mse_weights) && n_treatments != ncol(mse_weights)))){
+    stop("The number of treatment mse_weights is different from the number of treatments.")
+  }
+
+  if (iterations < 1) {
+    stop("Positive number of iterations needed.\n")
+  }
+
+  if (change < 1) {
+    change <- 3
+  }
+
+  if (change >= n_obs) {
+    change <- min(3, n_obs)
+  }
+
+  if (cooling != 2 && cooling != 1) {
+    stop("The value of cooling should be either 1 (cooling function 1) or 2 (cooling function 2). If built_in is 1, then the cooling function is 1.\n")
+  }
+
+  if (t0 == 0) {
+    t0 <- 10
+  }
+
+  if (tmax < 1) {
+    tmax <- 10
+  }
+
+  if (built_in != 0 && built_in != 1) {
+    stop("The value of built_in should be either 0 or 1 (use built_in R function).\n")
+  }
+
+  if (desired_test_vectors < 1) {
+    stop("Positive maximum number of tests needed.\n")
+  }
+
+  if (plot != 0 && plot != 1) {
+    stop("The value of plot should be either 0 (no plotting) or 1 (plotting).\n")
+  }
+
+  if (trace_output != 0 && trace_output != 1) {
+    stop("The value of trace_output should be either 0 (no trace) or 1 (with trace).\n")
+  }
+
+  if (percentage_equal_treatments > 100 || percentage_equal_treatments < 1){
+    stop("The percentage of equal treatments should be a value between 1 and 100.\n")
+  }
+
+  if (!is.null(prev_treatment) && length(prev_treatment) != nrow(data)){
+    stop("The length of the previous treatment should be the same as the number of observations.")
+  }
+
+  # Set missing values to a variable's mean and rescale (without centering) all variables to have a standard deviation/variance of 1
+  current_data = scale_vars(data)
+
+  # Run the treatment assignment many times for testing
+  curr_iter <- 0
+  curr_max_equal <- 0
+  df_treatments <- data.frame(1:n_obs)
+
+  if (plot) {
+    if (built_in){
+      vec <- 0:iterations
+      vec <- vec[seq(1, length(vec), 10)]
+      vec <- append(vec, iterations - 1, after = length(vec) - 1)
+      plotting_data <- data.frame(iter = vec)
+    } else {
+      plotting_data <- data.frame(iter = 0:iterations)
     }
+    write.csv(plotting_data, paste(tempdir(), plotting_file, sep="/"))
+  }
 
-    if (change >= n_obs) {
-      change <- min(3, n_obs)
-    }
+  current_count_equal <- 0 # We keep track of how many treatment vectors are the same
+  max_equal_treatments <- (percentage_equal_treatments * desired_test_vectors) / 100 # Exact number of treatments that are allowed to be equal
+  while (curr_iter < desired_test_vectors) {
+    curr_iter <- curr_iter + 1
+    curr_treatment <- assign_treatment(as.matrix(current_data), prev_treatment, n_treatments, n_per_group, mse_weights, iterations, change, cooling, t0, tmax, built_in, plot, 0)
 
-    if (cooling != 2 && cooling != 1) {
-      stop("The value of cooling should be either 1 (cooling function 1) or 2 (cooling function 2). If built_in is 1, then the cooling function is 1.\n")
-    }
-
-    if (t0 == 0) {
-      t0 <- 10
-    }
-
-    if (tmax < 1) {
-      tmax <- 10
-    }
-
-    if (built_in != 0 && built_in != 1) {
-      stop("The value of built_in should be either 0 or 1 (use built_in R function).\n")
-    }
-
-    if (desired_test_vectors < 1) {
-      stop("Positive maximum number of tests needed.\n")
-    }
-
-    if (plot != 0 && plot != 1) {
-      stop("The value of plot should be either 0 (no plotting) or 1 (plotting).\n")
-    }
-
-    if (trace_output != 0 && trace_output != 1) {
-      stop("The value of trace_output should be either 0 (no trace) or 1 (with trace).\n")
-    }
-
-    # Set missing values to a variable's mean and rescale (without centering) all variables to have a standard deviation/variance of 1
-    current_data = scale_vars(data)
-
-    # Run the treatment assignment many times for testing
-    curr_iter <- 0
-    curr_max_equal <- 0
-    df_treatments <- data.frame(1:n_obs)
-
-    if (plot) {
-      if (built_in){
-        vec <- 0:iterations
-        vec <- vec[seq(1, length(vec), 10)]
-        vec <- append(vec, iterations - 1, after = length(vec) - 1)
-        plotting_data <- data.frame(iter = vec)
-      } else {
-        plotting_data <- data.frame(iter = 0:iterations)
-      }
-      write.csv(plotting_data, paste(tempdir(), plotting_file, sep="/"))
-    }
-
-    current_count_equal <- 0 # We keep track of how many treatment vectors are the same
-    while (curr_iter < desired_test_vectors) {
-      curr_iter <- curr_iter + 1
-      curr_max_equal <- (percentage_equal_treatments * curr_iter) / 100 # Exact number of treatments that are allowed to be equal
-      curr_treatment <- assign_treatment(current_data, prev_treatment, n_treatments, iterations, change, cooling, t0, tmax, built_in, plot, 0)
-
-      curr_opt_ssd <- tail(curr_treatment, n=1)
-      curr_treatment <- curr_treatment[-length(curr_treatment)]
+    curr_opt_ssd <- tail(curr_treatment, n=1)
+    curr_treatment <- curr_treatment[-length(curr_treatment)]
+    if (percentage_equal_treatments < 100){
       current_count_equal <- current_count_equal + count_occurrences(df_treatments, curr_treatment) # If the new vector is equal to others, we increase the count
-      if (current_count_equal > curr_max_equal) {
+      if (current_count_equal > max_equal_treatments) {
         message ("Number of allowed duplicates exceeded; if you need more, consider decreasing 'iterations'.\n")
         curr_iter <- curr_iter - 1
         break
       }
-
-      iterstring <- paste('treatment_iter_', curr_iter, sep = '')
-
-      df_treatments[, iterstring] <- curr_treatment
-
-      # Print some feedback output
-      if (trace_output) {
-        cat ("Test iteration no. ", curr_iter, " of ", desired_test_vectors, ".\n", sep = "")
-      }
     }
 
-    if (desired_test_vectors == 1){
-      message ("Value of the objective function for the currently minimal MSE treatment assignment found: ", curr_opt_ssd, "\n\n", sep = "")
-    } else {
-      message ('The maximum number of iterations with a confidence of ', percentage_equal_treatments, '% is: ', curr_iter, '.\n\n', sep = '')
+    iterstring <- paste('treatment_iter_', curr_iter, sep = '')
+
+    df_treatments[, iterstring] <- curr_treatment
+
+    # Print some feedback output
+    if (trace_output) {
+      cat ("Test iteration no. ", curr_iter, " of ", desired_test_vectors, ".\n", sep = "")
     }
-    
-    if (plot) {
-      plotting_data <- read.csv(paste(tempdir(), plotting_file, sep="/"))
-      plotting_data <- plotting_data[, -1]
-      
-      dev.new()
-      iter_vec <- plotting_data[, 'iter']
-      curr_col = curr_iter + 1
-      min_val <- min(plotting_data[, 2:curr_col])
-      max_val <- max(plotting_data[, 2:curr_col])
+  }
 
-      plot(0, 0, xlim = c(min(iter_vec), max(iter_vec)), ylim = c(min_val, max_val), type = "n",
-           ylab = 'Value of objective function', xlab = 'Iterations', main = 'Optimization of the treatment assignment')
-      cl <- rainbow(curr_iter)
-      for (i in 1:curr_iter) {
-        lines(iter_vec, plotting_data[, i + 1], col = cl[i])
-      }
+  if (desired_test_vectors == 1){
+    message ("Value of the objective function for the currently minimal MSE treatment assignment found: ", curr_opt_ssd, "\n\n", sep = "")
+  } else {
+    message ('The maximum number of iterations with a confidence of ', percentage_equal_treatments, '% is: ', curr_iter, '.\n\n', sep = '')
+  }
+
+  if (plot) {
+    plotting_data <- read.csv(paste(tempdir(), plotting_file, sep="/"))
+    plotting_data <- plotting_data[, -1]
+
+    dev.new()
+    iter_vec <- plotting_data[, 'iter']
+    curr_col = curr_iter + 1
+    min_val <- min(plotting_data[, 2:curr_col])
+    max_val <- max(plotting_data[, 2:curr_col])
+
+    plot(0, 0, xlim = c(min(iter_vec), max(iter_vec)), ylim = c(min_val, max_val), type = "n",
+         ylab = 'Value of objective function', xlab = 'Iterations', main = 'Optimization of the treatment assignment')
+    cl <- rainbow(curr_iter)
+    for (i in 1:curr_iter) {
+      lines(iter_vec, plotting_data[, i + 1], col = cl[i])
     }
+  }
 
-    df_treatments <- df_treatments[-1]
+  names(df_treatments)[1] <- "id"
 
-    if (!is.null(filename)){
-      if(grepl("/", filename)){
-        write.csv(df_treatments, filename)
-      }else {
-        write.csv(df_treatments, paste(tempdir(), filename, sep="/"))
-      }
+  if (!is.null(filename)){
+    if(grepl("/", filename)){
+      write.csv(df_treatments, filename)
+    }else {
+      write.csv(df_treatments, paste(tempdir(), filename, sep="/"))
     }
+  }
 
-    return (df_treatments)
+  return (df_treatments)
 }

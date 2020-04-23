@@ -1,29 +1,33 @@
-\name{assignMinMSETreatment}
-\alias{assignMinMSETreatment}
+\name{assign_minMSE_treatment}
+\alias{assign_minMSE_treatment}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{minMSE Treatment Assignment for One or Multiple Treatment Groups -- Wrapper}
 \description{Calling \link{assign_treatment}, this user-friendly wrapper function computes a given number of treatment assignment vectors that will contain at most a certain percentage of duplicates, specified in percentage_equal_treatments. This is useful if non-parametric inference (randomization inference, sometimes called Fisher's exact test or permutation test) is desired (which is often advised), for analysis of significance of the treatment effect. The main function, assign_treatment, computes the treatment assignment vector according to available data (observable characteristics, covariate vectors) given about the units (individuals or clusters, such as schools, hospitals, ...)}
 \usage{
-assignMinMSETreatment(data,
-                      prev_treatment = NULL,
-                      n_treatments = 1,
-                      iterations = 50,
-                      change = 3,
-                      cooling = 1,
-                      t0 = 10,
-                      tmax = 10,
-                      built_in = 0,
-                      desired_test_vectors = 100,
-                      percentage_equal_treatments = 1,
-                      plot = 0,
-                      trace_output = 1,
-                      filename = NULL)
+assign_minMSE_treatment(data,
+                        prev_treatment = NULL,
+                        n_treatments = 1,
+                        n_per_group = NULL,
+                        mse_weights = NULL,
+                        iterations = 50,
+                        change = 3,
+                        cooling = 1,
+                        t0 = 10,
+                        tmax = 10,
+                        built_in = 0,
+                        desired_test_vectors = 100,
+                        percentage_equal_treatments = 1,
+                        plot = 0,
+                        trace_output = 1,
+                        filename = NULL)
 }
 
 \arguments{
-  \item{data}{a dataframe containing the covariate vectors for each attribute. The values might be missing or on different scales as the software deals with missing values and scaling automatically.}
+  \item{data}{a dataframe or a matrix containing the covariate vectors for each attribute. The values might be missing or on different scales as the software deals with missing values and scaling automatically.}
   \item{prev_treatment}{takes a numerical vector of partial treatment assignment as argument, and assigns the missing units (where the value is NA) to a treatment group while minimizing the objective function. Non-missing values are copied to the new vector, i.e., treatment group assignment of these observations is unaffected, but taken into consideration for achieving balanced treatment groups.}
   \item{n_treatments}{specifies the number of treatment groups desired (in addition to the control group); minimum and default value is n_treatments = 1.}
+  \item{n_per_group}{specifies a vector containing uneven sizes for the treatment groups. Default value is NULL, which yields even sized groups. The sum of the elements in the vector should be equal to the total number of observations.}
+  \item{mse_weights}{a vector containing the mse_weights for each treatment, or a matrix containing the mse_weights for treatments and outcomes and scaling factors.}
   \item{iterations}{specifies the number of iterations the algorithm performs; the default value is iterations = 50. Depending on the number of units and the number of covariates to consider for group assignment, a high value could result in a long run-time.}
   \item{change}{sets the number of units to exchange treatment in each iteration; the default value is change = 3. In case of big datasets (e.g. with more than 100 units), one might consider increasing the default value.}
   \item{cooling}{specifies the cooling scheme for the simulated annealing algorithm to use. cooling = 1, which is the default scheme, sets the temperature to
@@ -63,15 +67,16 @@ input <- data.frame(c(10, 20, 30, 40, 130, 40, 120, 5, 10, 80),
                     c(1, 0, 2, 1, 0, 1, 0, 2, 1, 0))
 colnames(input) <- c("IQ", "grade_maths", "both_parents")
 
-assignMinMSETreatment(input,
-                      prev_treatment = c(0, NA, NA, NA, 1, NA, NA, NA, NA, NA),
-                      n_treatments = 2,
-                      iterations = 100,
-                      trace_output = 1,
-                      built_in = 0,
-                      desired_test_vectors = 100,
-                      plot = 0,
-                      filename = NULL)
+assign_minMSE_treatment(input,
+                        prev_treatment = c(0, NA, NA, NA, 1, NA, NA, NA, NA, NA),
+                        n_treatments = 2,
+                        mse_weights = c(1, 2),
+                        iterations = 100,
+                        trace_output = 1,
+                        built_in = 0,
+                        desired_test_vectors = 100,
+                        plot = 0,
+                        filename = NULL)
 }
 
 \keyword{treatment}

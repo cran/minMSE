@@ -5,20 +5,21 @@ Performs treatment assignment for (field) experiments considering available, pos
 
 ## Usage
 ```r
-assignMinMSETreatment(data, 
-                      prev_treatment = NULL, 
-                      n_treatments = 1, 
-                      iterations = 50, 
-                      change = 3, 
-                      cooling = 1, 
-                      t0 = 10, 
-                      tmax = 10, 
-                      built_in = 0, 
-                      desired_test_vectors = 100, 
-                      percentage_equal_treatments = 1, 
-                      plot = 1, 
-                      trace_output = 1, 
-                      filename = NULL)
+assign_minMSE_treatment(data,
+                        prev_treatment = NULL,
+                        n_treatments = 1,
+                        mse_weights = NULL,
+                        iterations = 50,
+                        change = 3,
+                        cooling = 1,
+                        t0 = 10,
+                        tmax = 10,
+                        built_in = 0,
+                        desired_test_vectors = 100,
+                        percentage_equal_treatments = 1,
+                        plot = 0,
+                        trace_output = 1,
+                        filename = NULL)
 ```
 The only mandatory argument is `data`. All other arguments have a default, as shown above.
 
@@ -28,6 +29,8 @@ The only mandatory argument is `data`. All other arguments have a default, as sh
 `prev_treatment`&nbsp;&nbsp;&nbsp;&nbsp;takes a numerical vector of partial treatment assignment as argument, and assigns the missing units (where the value is NA) to a treatment group while minimizing the objective function. Non-missing values are copied to the new vector, i.e., treatment group assignment of these observations is unaffected, but taken into consideration for achieving balanced treatment groups.
 
 `n_treatments`&nbsp;&nbsp;&nbsp;&nbsp;specifies the number of treatment groups desired (in addition to the control group); minimum and default value is `n_treatments = 1`.
+
+`mse_weights`&nbsp;&nbsp;&nbsp;&nbsp;a vector containing the mse_weights for each treatment, or a matrix containing the mse_weights for treatments and outcomes and scaling factors.
 
 `iterations`&nbsp;&nbsp;&nbsp;&nbsp;specifies the number of iterations the algorithm performs; the default value is `iterations = 50`. Depending on the number of units and the number of covariates to consider for group assignment, a high value could result in a long run-time.
 
@@ -79,15 +82,16 @@ input <- data.frame(c(10, 20, 30, 40, 130, 40, 120, 5, 10, 80),
                     c(1, 0, 2, 1, 0, 1, 0, 2, 1, 0))
 colnames(input) <- c("IQ", "grade_maths", "both_parents")
 
-assignMinMSETreatment(input,
-                      prev_treatment = c(0, NA, NA, NA, 1, NA, NA, NA, NA, NA),
-                      n_treatments = 2,
-                      iterations = 100,
-                      trace_output = 1,
-                      built_in = 0,
-                      desired_test_vectors = 100,
-                      plot = 1,
-                      filename = 'possible_treatments.csv')
+assign_minMSE_treatment(input,
+                        prev_treatment = c(0, NA, NA, NA, 1, NA, NA, NA, NA, NA),
+                        n_treatments = 2,
+                        mse_weights = c(1, 2),
+                        iterations = 100,
+                        trace_output = 1,
+                        built_in = 0,
+                        desired_test_vectors = 100,
+                        plot = 0,
+                        filename = NULL)
 ```
 
 Running this will perform an optimization of the treatment assignment over the `input` dataset. It will generate three different groups (0, 1, 2) where 0 is the control group. The existing treatment assignment will be taken into consideration and will not be changed during the iterations.

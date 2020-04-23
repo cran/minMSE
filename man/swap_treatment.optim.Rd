@@ -11,7 +11,8 @@ This function calls \link[minMSE]{swap_treatment}, but since \link{optim} requir
 swap_treatment.optim(current_treatment,
                      data = NULL,
                      change,
-                     prev_index_list = NULL)
+                     prev_index_list = NULL,
+                     mse_weights = NULL)
 }
 
 \arguments{
@@ -19,6 +20,7 @@ swap_treatment.optim(current_treatment,
   \item{data}{the parameter is only needed for optim, it does not play any role.}
   \item{change}{number of elements that will be changed in the treatment vector.}
   \item{prev_index_list}{index list of the elements that can be changed. The current treatment vector may belong to a previous, unchangeable assignment.}
+  \item{mse_weights}{the parameter is only needed for optim, it does not play any role.}
 }
 
 \value{

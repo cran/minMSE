@@ -10,13 +10,15 @@ This function calls \link[minMSE]{evaluate_solution}, but since \link{optim} req
 \usage{
 evaluate_solution.optim(par,
                         data,
+                        mse_weights = NULL,
                         change = NULL,
                         prev_index_list = NULL)
 }
 
 \arguments{
   \item{par}{a treatment assignment. The treatment and the data must have the same number of observations (rows).}
-  \item{data}{a dataframe containing the covariate vectors for each attribute.}
+  \item{data}{a matrix containing the covariate vectors for each attribute.}
+  \item{mse_weights}{a vector containing the mse_weights for each treatment, or a matrix containing the mse_weights for treatments and outcomes and scaling factors.}
   \item{change}{the parameter is only needed for optim, it does not play any role.}
   \item{prev_index_list}{the parameter is only needed for optim, it does not play any role.}
 }
@@ -37,10 +39,7 @@ Giulia Baldini \email{giulia.baldini@uni-bonn.de}
 }
 
 \examples{
-input <- data.frame(c(10, 20, 30, 40, 130, 40, 120, 5, 10, 80),
-                    c(2, 6, 2, 8, 1, 10, 9, 8, 7, 5),
-                    c(1, 0, 2, 1, 0, 1, 0, 2, 1, 0))
-colnames(input) <- c("IQ", "grade_maths", "both_parents")
+input <- matrix(1:30, nrow = 10, ncol = 3)
 
 evaluate_solution.optim(par = c(0, 1, 1, 1, 1, 0, 0, 0, 0, 0),
                         input)

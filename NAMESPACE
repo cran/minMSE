@@ -1,6 +1,6 @@
 exportPattern("^[[:alpha:]]+")
 import(MASS)
-export(assignMinMSETreatment)
+export(assign_minMSE_treatment)
 importFrom("grDevices", "dev.off", "dev.new", "rainbow")
 importFrom("graphics", "lines")
 importFrom("stats", "optim", "runif", "sd")

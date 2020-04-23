@@ -10,12 +10,13 @@ More precisely: it computes the mean squared error of the treatment effect estim
 The function uses matrix multiplication and the Moore-Penrose generalized inverse.
 }
 \usage{
-evaluate_solution(par, data)
+evaluate_solution(par, data, mse_weights = NULL)
 }
 
 \arguments{
   \item{par}{a treatment assignment. The treatment and the data must have the same number of observations (rows).}
-  \item{data}{a dataframe containing the covariate vectors for each attribute.}
+  \item{data}{a matrix containing the covariate vectors for each attribute.}
+  \item{mse_weights}{a vector containing the mse_weights for each treatment, or a matrix containing the mse_weights for treatments and outcomes and scaling factors.}
 }
 \value{
   Returns the mean squared error value for the current treatment assignment.
@@ -34,13 +35,11 @@ Giulia Baldini \email{giulia.baldini@uni-bonn.de}
 }
 
 \examples{
-input <- data.frame(c(10, 20, 30, 40, 130, 40, 120, 5, 10, 80),
-                    c(2, 6, 2, 8, 1, 10, 9, 8, 7, 5),
-                    c(1, 0, 2, 1, 0, 1, 0, 2, 1, 0))
-colnames(input) <- c("IQ", "grade_maths", "both_parents")
+input <- matrix(1:30, nrow = 10, ncol = 3)
 
 evaluate_solution(par = c(0, 1, 1, 1, 1, 0, 0, 0, 0, 0),
-                  input)
+                  input,
+                  mse_weights = c(1, 2))
 }
 
 \keyword{treatment}
