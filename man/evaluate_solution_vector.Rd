@@ -1,5 +1,5 @@
-\name{evaluate_solution}
-\alias{evaluate_solution}
+\name{evaluate_solution_vector}
+\alias{evaluate_solution_vector}
 
 \title{
 Evaluate MSE Equation
@@ -10,13 +10,13 @@ More precisely: it computes the mean squared error of the treatment effect estim
 The function uses matrix multiplication and the Moore-Penrose generalized inverse.
 }
 \usage{
-evaluate_solution(treatment, data, mse_weights = NULL)
+evaluate_solution_vector(treatment, data, mse_weights)
 }
 
 \arguments{
   \item{treatment}{a treatment assignment. The treatment and the data must have the same number of observations (rows).}
   \item{data}{a matrix containing the covariate vectors for each attribute.}
-  \item{mse_weights}{not used, needed for compatibility.}
+  \item{mse_weights}{a vector containing the mse_weights for each treatment.}
 }
 \value{
   Returns the mean squared error value for the current treatment assignment.
@@ -37,8 +37,9 @@ Giulia Baldini \email{giulia.baldini@uni-bonn.de}
 \examples{
 input <- matrix(1:30, nrow = 10, ncol = 3)
 
-evaluate_solution(treatment = c(0, 1, 1, 1, 1, 0, 0, 0, 0, 0),
-                  input)
+evaluate_solution_vector(treatment = c(0, 1, 1, 1, 1, 0, 0, 0, 0, 0),
+                         input,
+                         mse_weights = c(1, 2))
 }
 
 \keyword{treatment}

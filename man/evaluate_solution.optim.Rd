@@ -10,6 +10,8 @@ This function calls \link[minMSE]{evaluate_solution}, but since \link{optim} req
 \usage{
 evaluate_solution.optim(par,
                         data,
+                        evaluation_function = evaluate_solution,
+                        swap_treatment_function = NULL,
                         mse_weights = NULL,
                         change = NULL,
                         prev_index_list = NULL)
@@ -18,6 +20,8 @@ evaluate_solution.optim(par,
 \arguments{
   \item{par}{a treatment assignment. The treatment and the data must have the same number of observations (rows).}
   \item{data}{a matrix containing the covariate vectors for each attribute.}
+  \item{evaluation_function}{the function used to evaluate the MSE treatment. Default is \link[minMSE]{evaluate_solution}, which does not take into account outcome or treatment weights. Other options are \link[minMSE]{evaluate_solution_vector} and \link[minMSE]{evaluate_solution_matrix}.}
+  \item{swap_treatment_function}{the parameter is only needed for optim, it does not play any role.}
   \item{mse_weights}{a vector containing the mse_weights for each treatment, or a matrix containing the mse_weights for treatments and outcomes and scaling factors.}
   \item{change}{the parameter is only needed for optim, it does not play any role.}
   \item{prev_index_list}{the parameter is only needed for optim, it does not play any role.}

@@ -2,16 +2,17 @@ Package: minMSE
 Type: Package
 Title: Implementation of the minMSE Treatment Assignment Method for One
         or Multiple Treatment Groups
-Version: 0.3.1
+Version: 0.5.1
 Author: Sebastian O. Schneider, Giulia Baldini
 Maintainer: Sebastian O. Schneider <sschneider@coll.mpg.de>
 Description: Performs treatment assignment for (field) experiments considering available, possibly multivariate and continuous, information (covariates, observable characteristics), that is: forms balanced treatment groups, according to the minMSE-method as proposed by Schneider and Schlather (2017) <DOI:10419/161931>.
-URL: http://www.sebastianschneider.eu
+URL: https://www.sebastianoschneider.com
 License: GNU General Public License
 Encoding: UTF-8
-LazyData: true
-Imports: MASS
-NeedsCompilation: no
-Packaged: 2020-04-22 19:29:14 UTC; Sebastian Schneider
+Imports: MASS, Rcpp
+RoxygenNote: 7.1.0
+LinkingTo: Rcpp
+NeedsCompilation: yes
+Packaged: 2021-11-26 21:36:56 UTC; schneider
 Repository: CRAN
-Date/Publication: 2020-04-23 16:20:02 UTC
+Date/Publication: 2021-11-26 22:50:08 UTC

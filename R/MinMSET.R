@@ -25,88 +25,96 @@
 library(MASS)
 
 plotting_file <- "plotting_data.csv"
-program_output <- "program_output.txt"
+output_file <- "output_file.txt"
 
-gcd <- function(v, t) {
-  while ((c <- v %% t) != 0) {
-    v <- t
-    t <- c
-  }
-  return (t)
-}
+evaluate_solution_matrix <- function(treatment, data, mse_weights) {
+  ind <- c(1:length(treatment))
+  n_treatments <- max(treatment)
+  n_outcomes <- nrow(mse_weights)
+  v_norm <- sum(apply(mse_weights, 2, vector_gcd))
+  w_norm <- sum(apply(mse_weights, 1, vector_gcd))
 
-vector_gcd <- function(vec) {
-  current_gcd <- vec[1]
-  for (i in 1:length(vec)) {
-    current_gcd = gcd(vec[i], current_gcd)
-
-    if (current_gcd == 1){
-      return (1)
-    }
-  }
-  return(current_gcd)
-}
-
-evaluate_solution <- function(par, data, mse_weights = NULL) {
-  ind <- c(1:length(par))
-
-  w_norm <- 1
-  v_norm <- 1
-  n_outcomes <- 1
-  n_treatments <- 1 # Consider the number of treatments to be 1 when we use the scaling
-  if (is.vector(mse_weights)){ # Vector case
-    v_norm <- sum(mse_weights) # Compute the l1 norm of the vector
-  } else if (is.matrix(mse_weights)){ # Matrix case
-    n_outcomes <- nrow(mse_weights)
-    v_norm <- sum(apply(mse_weights, 2, vector_gcd))
-    w_norm <- sum(apply(mse_weights, 1, vector_gcd))
-  } else { # Then it is null
-    n_treatments <- max(par)
-  }
-
-  x_0 <- data[(par[ind] == 0), , drop = FALSE]
+  x_0 <- data[(treatment[ind] == 0), , drop = FALSE]
   x_0_inv <- ginv(crossprod(x_0)) # Import MASS and use ginv for the pseudoinverse
-  inv_x0 <- n_treatments * w_norm * v_norm * x_0_inv # Weigh x_0 by the w and v norm or by the number of treatments
+  inv_x0 <- w_norm * v_norm * x_0_inv # Weigh x_0 by the w and v norm
 
   wk_weight <- 1
   vk_weight <- 1
   sum_of_scaled <- inv_x0 # Initialize sum with inv_x0
   for (i in 1:n_outcomes){
     sum_of_inv_xt <- 0
-    if (is.matrix(mse_weights)){ # Matrix case
-      wk_weight <- vector_gcd(mse_weights[i, ])
-    }
+    wk_weight <- vector_gcd(mse_weights[i, ])
     for (j in 1:n_treatments) {
-      x <- data[(par[ind] == j), , drop = FALSE]
+      x <- data[(treatment[ind] == j), , drop = FALSE]
       x_inv <- ginv(crossprod(x))
-      if (is.vector(mse_weights)){ # Vector case
-        vk_weight <- mse_weights[j]
-      } else if (is.matrix(mse_weights)){ # Matrix case
-        vk_weight <- mse_weights[i, j] / wk_weight
-      }
+      vk_weight <- mse_weights[i, j] / wk_weight
       sum_of_inv_xt <- sum_of_inv_xt + vk_weight * x_inv
     }
     sum_of_scaled <- sum_of_scaled + wk_weight * sum_of_inv_xt
   }
 
   mean_of_xi <- colMeans(data) # Mean of all columns
-  evaluated_value = crossprod(mean_of_xi, sum_of_scaled) %*% mean_of_xi
+  evaluated_value <- crossprod(mean_of_xi, sum_of_scaled) %*% mean_of_xi
+  return (evaluated_value)
+}
+
+
+evaluate_solution_vector <- function(treatment, data, mse_weights) {
+  ind <- c(1:length(treatment))
+  n_treatments <- max(treatment)
+  v_norm <- sum(mse_weights) # Compute the l1 norm of the vector
+  
+  x_0 <- data[(treatment[ind] == 0), , drop = FALSE]
+  x_0_inv <- ginv(crossprod(x_0)) # Import MASS and use ginv for the pseudoinverse
+  inv_x0 <- v_norm * x_0_inv # Weigh x_0 by the v norm
+  
+  vk_weight <- 1
+  sum_of_inv_xt <- inv_x0 # Initialize sum with inv_x0
+  for (j in 1:n_treatments) {
+    x <- data[(treatment[ind] == j), , drop = FALSE]
+    x_inv <- ginv(crossprod(x))
+    vk_weight <- mse_weights[j]
+    sum_of_inv_xt <- sum_of_inv_xt + vk_weight * x_inv
+  }
+  
+  mean_of_xi <- colMeans(data) # Mean of all columns
+  evaluated_value <- crossprod(mean_of_xi, sum_of_inv_xt) %*% mean_of_xi
+  
+  return (evaluated_value)
+}
+
+evaluate_solution <- function(treatment, data, mse_weights = NULL) {
+  ind <- c(1:length(treatment))
+  n_treatments <- max(treatment)
+
+  x_0 <- data[(treatment[ind] == 0), , drop = FALSE]
+  x_0_inv <- ginv(crossprod(x_0)) # Import MASS and use ginv for the pseudoinverse
+  sum_of_inv_xt <- n_treatments * x_0_inv # Weigh x_0 by the number of treatments
+  
+  for (i in 1:n_treatments) {
+    x <- data[(treatment[ind] == i), , drop = FALSE]
+    x_inv <- ginv(crossprod(x))
+    sum_of_inv_xt <- sum_of_inv_xt + x_inv
+  }
+  
+  mean_of_xi <- colMeans(data) # Mean of all columns
+  evaluated_value <- crossprod(mean_of_xi, sum_of_inv_xt) %*% mean_of_xi
 
   return (evaluated_value)
 }
 
-evaluate_solution.optim <- function(par, data, mse_weights = NULL, change = NULL, prev_index_list = NULL) { # Optim wants fn and gr to have the same parameters
-  return(evaluate_solution(par, data, mse_weights))
+
+evaluate_solution.optim <- function(par, data, evaluation_function = evaluate_solution, swap_treatment_function = NULL, mse_weights = NULL, change = NULL, prev_index_list = NULL) { # Optim wants fn and gr to have the same parameters
+  return(evaluation_function(par, data, mse_weights))
 }
 
 scale_vars <- function(data) {
-  col_means = colMeans(data, na.rm = TRUE)
-
+  col_means <- colMeans(data, na.rm = TRUE)
+  data_sd <- sapply(data, sd, na.rm = TRUE)
   for (i in 1:ncol(data)) {
     data[is.na(data[, i]), i] <- col_means[i]
-    colsd <- sd(data[, i], na.rm = TRUE)
-    if (colsd > 0) {
-      data[, i] <- scale(data[, i], center = FALSE, scale = colsd)
+    if (data_sd[i] > 0) {
+      data[, i] <- scale(data[, i], center = FALSE, scale = data_sd[i])
     }
     else {
       data[, i] <- rep(0 , length(data[, i]))
@@ -116,45 +124,28 @@ scale_vars <- function(data) {
 }
 
 swap_treatment <- function(current_treatment, change, prev_index_list = NULL) {
-  if (is.null(prev_index_list)){
-    max_swaps <- change - 1 # Maximum possible swaps between indices
-    s_ind <- sample(1:length(current_treatment)) # Sample random indices so that we can always swap the first max_swaps elements
-    scrambled_treatment <- current_treatment[s_ind]
-  } else {
-    max_swaps <- min(change, length(prev_index_list)) - 1 # Maximum swaps is either change or the length of the ones still to assign - it might be that there are less to assign than 'change'
-    trunc_treatment <- current_treatment[prev_index_list] # Treatment containing only the ones to assign
-    s_ind <- sample(1:length(trunc_treatment)) # Sample random indices so that we can always swap the first max_swaps elements
-
-    scrambled_treatment <- trunc_treatment[s_ind]
-  }
-
+  max_swaps <- change - 1 # Maximum possible swaps between indices
+  s_ind <- sample(1:length(current_treatment)) # Sample random indices so that we can always swap the first max_swaps elements
+  scrambled_treatment <- current_treatment[s_ind]
   scrambled_treatment[1:(max_swaps+1)] <- scrambled_treatment[c(2:(max_swaps+1), 1)]
-
-  if (is.null(prev_index_list)){
-    current_treatment <- scrambled_treatment[order(s_ind)] # If we don't have a previous assignment, take the whole list
-  } else {
-    current_treatment[prev_index_list] <- scrambled_treatment[order(s_ind)] # Otherwise substitute only the ones that are not assigned
-  }
-
+  current_treatment <- scrambled_treatment[order(s_ind)] # If we don't have a previous assignment, take the whole list
+  
   return (current_treatment)
 }
 
-swap_treatment.optim <- function(current_treatment, data = NULL, change, prev_index_list = NULL, mse_weights = NULL) { # Optim wants fn and gr to have the same parameters
-  return (swap_treatment(current_treatment, change, prev_index_list))
+swap_treatment_prev <- function(current_treatment, change, prev_index_list) {
+  max_swaps <- min(change, length(prev_index_list)) - 1 # Maximum swaps is either change or the length of the ones still to assign - it might be that there are less to assign than 'change'
+  trunc_treatment <- current_treatment[prev_index_list] # Treatment containing only the ones to assign
+  s_ind <- sample(1:length(trunc_treatment)) # Sample random indices so that we can always swap the first max_swaps elements
+  scrambled_treatment <- trunc_treatment[s_ind]
+  scrambled_treatment[1:(max_swaps+1)] <- scrambled_treatment[c(2:(max_swaps+1), 1)]
+  current_treatment[prev_index_list] <- scrambled_treatment[order(s_ind)] # Otherwise substitute only the ones that are not assigned
+  
+  return (current_treatment)
 }
 
-count_occurrences <- function(df_treatments, curr_treatment) {
-  if (ncol(df_treatments) == 1) {
-    return (0)
-  }
-
-  if (ncol(df_treatments) == 2){
-    count <- if (all(df_treatments[, 2] == curr_treatment)) 1 else 0  # If the current treatment is equal to the existing treatment
-  } else {
-    count <- sum(apply(df_treatments[, 2:ncol(df_treatments)] == curr_treatment, 2, all))  # If the current treatment is equal to a column of the dataframe
-  }
-
-  return (count)
+swap_treatment.optim <- function(current_treatment, data = NULL, evaluation_function = NULL, swap_treatment_function = swap_treatment, mse_weights = NULL, change, prev_index_list = NULL) { # Optim wants fn and gr to have the same parameters
+  return (swap_treatment_function(current_treatment, change, prev_index_list))
 }
 
 sample_with_prev_treatment <- function(prev_treatment, n_treatments, n_per_group){
@@ -186,6 +177,8 @@ sample_with_prev_treatment <- function(prev_treatment, n_treatments, n_per_group
 
 assign_treatment <- function(current_data,
                              prev_treatment = NULL,
+                             evaluation_function = evaluate_solution,
+                             swap_treatment_function = swap_treatment,
                              n_treatments = 1,
                              n_per_group = NULL,
                              mse_weights = NULL,
@@ -216,7 +209,7 @@ assign_treatment <- function(current_data,
   }
 
   # Evaluate first solution
-  current_ssd <- evaluate_solution(current_treatment, current_data, mse_weights)
+  current_ssd <- evaluation_function(current_treatment, current_data, mse_weights)
 
   # Choose the best solution out of 5% of the iterations
   num_first_solutions = min(max(round(iterations / 100 * 5) - 1, n_obs - 1), round(iterations / 100 * 10) - 1)
@@ -227,7 +220,7 @@ assign_treatment <- function(current_data,
     } else { # In case some people are already assigned a group
       next_treatment <- sample_with_prev_treatment(prev_treatment, n_treatments, n_per_group)
     }
-    next_ssd <- evaluate_solution(next_treatment, current_data, mse_weights)
+    next_ssd <- evaluation_function(next_treatment, current_data, mse_weights)
 
     if (next_ssd < current_ssd) {
       current_treatment <- next_treatment
@@ -259,7 +252,7 @@ assign_treatment <- function(current_data,
 
   # Use the built-in function instead of our program
   if (built_in == 1) {
-    save_output_filename <- paste(tempdir(), program_output, sep="/")
+    save_output_filename <- paste(tempdir(), output_file, sep="/")
     sink(save_output_filename)
     number <- as.double(regmatches(opt_ssd, regexec('-?[0-9\\.]+', opt_ssd))[[1]])
     custom_scale <- opt_ssd / number
@@ -267,6 +260,9 @@ assign_treatment <- function(current_data,
       optim(
         par = current_treatment,
         fn = evaluate_solution.optim,
+        evaluation_function = evaluation_function,
+        swap_treatment_function = swap_treatment_function,
+        mse_weights = mse_weights,
         data = current_data,
         gr = swap_treatment.optim,
         change = change,
@@ -313,8 +309,8 @@ assign_treatment <- function(current_data,
   # Start optimization with our program
   for (k in 1:iterations) {
     # Swap some number (change) of values in the treatment assignment
-    next_treatment <- swap_treatment(current_treatment, change, prev_treat_na_index)
-    next_ssd <- evaluate_solution(next_treatment, current_data, mse_weights)
+    next_treatment <- swap_treatment_function(current_treatment, change, prev_treat_na_index)
+    next_ssd <- evaluation_function(next_treatment, current_data, mse_weights)
 
     rand = runif(1)
     if (cooling == 1) {
@@ -446,6 +442,20 @@ assign_minMSE_treatment <- function(data,
   if (!is.null(prev_treatment) && length(prev_treatment) != nrow(data)){
     stop("The length of the previous treatment should be the same as the number of observations.")
   }
+  
+  if (is.vector(mse_weights)){
+    evaluation_function <- evaluate_solution_vector
+  } else if (is.matrix(mse_weights)){
+    evaluation_function <- evaluate_solution_matrix
+  } else {
+    evaluation_function <- evaluate_solution
+  }
+  
+  if (is.null(prev_treatment)){
+    swap_treatment_function <- swap_treatment
+  } else {
+    swap_treatment_function <- swap_treatment_prev
+  }
 
   # Set missing values to a variable's mean and rescale (without centering) all variables to have a standard deviation/variance of 1
   current_data = scale_vars(data)
@@ -471,7 +481,7 @@ assign_minMSE_treatment <- function(data,
   max_equal_treatments <- (percentage_equal_treatments * desired_test_vectors) / 100 # Exact number of treatments that are allowed to be equal
   while (curr_iter < desired_test_vectors) {
     curr_iter <- curr_iter + 1
-    curr_treatment <- assign_treatment(as.matrix(current_data), prev_treatment, n_treatments, n_per_group, mse_weights, iterations, change, cooling, t0, tmax, built_in, plot, 0)
+    curr_treatment <- assign_treatment(as.matrix(current_data), prev_treatment, evaluation_function, swap_treatment_function, n_treatments, n_per_group, mse_weights, iterations, change, cooling, t0, tmax, built_in, plot, 0)
 
     curr_opt_ssd <- tail(curr_treatment, n=1)
     curr_treatment <- curr_treatment[-length(curr_treatment)]

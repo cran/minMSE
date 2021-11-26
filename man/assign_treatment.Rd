@@ -11,6 +11,8 @@ Consider using the user-friendly wrapper function \link[minMSE]{assign_minMSE_tr
 \usage{
 assign_treatment(current_data,
                  prev_treatment = NULL,
+                 evaluation_function = evaluate_solution,
+                 swap_treatment_function = swap_treatment,
                  n_treatments = 1,
                  n_per_group = NULL,
                  mse_weights = NULL,
@@ -27,6 +29,8 @@ assign_treatment(current_data,
 \arguments{
   \item{current_data}{a matrix containing the covariate vectors for each attribute. If the values are missing or on different scales, please use \link[minMSE]{assign_minMSE_treatment}, which automatically scales the data.}
   \item{prev_treatment}{takes a numerical vector of partial treatment assignment as argument, and assigns the missing units (where the value is NA) to a treatment group while minimizing the objective function. Non-missing values are copied to the new vector, i.e., treatment group assignment of these observations is unaffected, but taken into consideration for achieving balanced treatment groups.}
+  \item{evaluation_function}{the function used to evaluate the MSE treatment. Default is \link[minMSE]{evaluate_solution}, which does not take into account outcome or treatment weights. Other options are \link[minMSE]{evaluate_solution_vector} and \link[minMSE]{evaluate_solution_matrix}.}
+  \item{swap_treatment_function}{the function used to create new treatments. Default is \link[minMSE]{swap_treatment}. Other options are \link[minMSE]{swap_treatment_prev} which, given a previous treatment, creates a new treatment assignment that takes the previous one into account.}
   \item{n_treatments}{specifies the number of treatment groups desired (in addition to the control group); minimum and default value is n_treatments = 1.}
   \item{n_per_group}{specifies a vector containing uneven sizes for the treatment groups. Default value is NULL, which yields even sized groups. The sum of the elements in the vector should be equal to the total number of observations.}
   \item{mse_weights}{a vector containing the mse_weights for each treatment, or a matrix containing the mse_weights for treatments and outcomes and scaling factors.}
@@ -67,6 +71,8 @@ With the default setting of plotting and using the trace output, the program wri
 input <- matrix(1:30, nrow = 10, ncol = 3)
 
 assign_treatment(input,
+                 evaluation_function = evaluate_solution_vector,
+                 swap_treatment_function = swap_treatment_prev,
                  prev_treatment = c(0, NA, NA, NA, 1, NA, NA, NA, NA, NA),
                  n_treatments = 2,
                  mse_weights = c(1, 2),

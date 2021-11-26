@@ -1,5 +1,5 @@
-\name{program_output}
-\alias{program_output}
+\name{output_file}
+\alias{output_file}
 
 \title{TXT File That Contains Additional Output Information}
 
